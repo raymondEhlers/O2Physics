@@ -142,12 +142,13 @@ struct TrackSkimLBL {
       return;
     }
 
-    for (auto& track : tracks) {
-      float energy = std::sqrt(track.p() * track.p() + mPionSquared);
-      trackSkim(collision.globalIndex(), track.pt(), track.eta(), track.phi(), energy);
+    for (auto& cluster : clusters) {
+      // TODO: Calculate properly with vertex correction
+      float energy = std::sqrt(cluster.p() * cluster.p() + mPionSquared);
+      clusterSkim(collision.globalIndex(), cluster.eta(), cluster.phi(), energy);
     }
   }
-  PROCESS_SWITCH(TrackSkimLBL, processClusters, "Tracks", true);
+  PROCESS_SWITCH(TrackSkimLBL, processClusters, "Clusters", true);
 
   // TODO: Photon subscription? Or just build from clusters?
 };
