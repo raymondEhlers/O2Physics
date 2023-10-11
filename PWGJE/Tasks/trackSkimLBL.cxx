@@ -20,7 +20,7 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-// Track skimming task for Berkeley folks
+// Track skimming task for Berkeley
 //
 // Author: Raymond Ehlers <raymond.ehlers@cern.ch>, LBL/UC Berkeley
 
@@ -40,13 +40,15 @@ namespace LBLSkim
 {
 // NOTE: We don't want a Collision Index ID, as this will require the full input AO2D, which we don't want!
 DECLARE_SOA_INDEX_COLUMN(Collision, collision);
-DECLARE_SOA_COLUMN(CollisionIndex, collisionIndex, int);
+DECLARE_SOA_COLUMN(CollisionIndex, collisionIndex, int64_t);
 // Event level
 // TODO: RJE: Check precision and ranges to ensure they're suitable for all values.
 //            They could be tuned up or down based on requirements.
-DECLARE_SOA_COLUMN(RunNumber, runNumber, int32_t);
+// TODO: RJE: Removed run number since it requires BC, which makes the rest more difficult. Can add back later
+//DECLARE_SOA_COLUMN(RunNumber, runNumber, int32_t);
 DECLARE_SOA_COLUMN(Centrality, centrality, float32_t);
 DECLARE_SOA_COLUMN(EventPlane, eventPlane, float32_t);
+DECLARE_SOA_COLUMN(EventWeight, eventWeight, float32_t);
 // Track / cluster level
 DECLARE_SOA_COLUMN(Pt, pt, float32_t);
 DECLARE_SOA_COLUMN(Eta, eta, float32_t);
@@ -57,52 +59,101 @@ DECLARE_SOA_COLUMN(Label, label, int32_t);
 DECLARE_SOA_COLUMN(EncodedInformation, encodedInformation, int32_t);
 } // namespace LBLSkim
 
-// TODO: RJE: MC vs Data. We want to only include MC fields if they're meaningful. Probably best to define separate tables
+/**********************************
+ * Define the skim tables from here.
+ *
+ * NOTE: RJE: I manually defined tables for now, but for better future consistency, we might consider definining them
+ *            with macros. That way, we can ensure the format will match up (since there's no concept of table inheritance)
+ *            while still only including the MC fields conditionally.
+***********************************/
+/////////////////
+// Event level tables
+/////////////////
 DECLARE_SOA_TABLE(EventSkimLBL, "AOD", "EVTSKIMLBLV1",
                   o2::soa::Index<>,
-                  LBLSkim::CollisionIndex,
-                  LBLSkim::RunNumber
+                  LBLSkim::CollisionIndex
+                  //LBLSkim::RunNumber
                   //LBLSkim::Centrality,
                   //LBLSkim::EventPlane
 );
+DECLARE_SOA_TABLE(MCEventSkimLBL, "AOD", "MCEVTSKIMLBLV1",
+                  o2::soa::Index<>,
+                  LBLSkim::CollisionIndex,
+                  //LBLSkim::RunNumber,
+                  //LBLSkim::Centrality,
+                  //LBLSkim::EventPlane
+                  // MC only fields
+                  LBLSkim::EventWeight
+);
+/////////////////
+// Track tables
+/////////////////
 DECLARE_SOA_TABLE(TrackSkimLBL, "AOD", "TRKSKIMLBLV1",
                   o2::soa::Index<>,
                   LBLSkim::CollisionIndex,
                   LBLSkim::Pt,
                   LBLSkim::Eta,
                   LBLSkim::Phi,
-                  // These fields should be conditional
+                  );
+// MC det and part level
+// TODO: RJE: Need to be able to turn the encoded info field on and off
+DECLARE_SOA_TABLE(MCDetLevelTrackSkimLBL, "AOD", "MCDTRKSKIMLBLV1",
+                  o2::soa::Index<>,
+                  LBLSkim::CollisionIndex,
+                  LBLSkim::Pt,
+                  LBLSkim::Eta,
+                  LBLSkim::Phi,
+                  // MC only fields
                   LBLSkim::ParticleID,
                   LBLSkim::Label,
                   LBLSkim::EncodedInformation
                   );
-                  // We can add whatever is desired here, including conditionally
+// Same as det level, but with a separate name to ensure the tables don't conflict
+DECLARE_SOA_TABLE(MCPartLevelTrackSkimLBL, "AOD", "MCPTRKSKIMLBLV1",
+                  o2::soa::Index<>,
+                  LBLSkim::CollisionIndex,
+                  LBLSkim::Pt,
+                  LBLSkim::Eta,
+                  LBLSkim::Phi,
+                  // MC only fields
+                  LBLSkim::ParticleID,
+                  LBLSkim::Label,
+                  LBLSkim::EncodedInformation
+                  );
+/////////////////
+// Cluster tables
+/////////////////
 DECLARE_SOA_TABLE(ClusterSkimLBL, "AOD", "CLUSSKIMLBLV1",
                   o2::soa::Index<>,
                   LBLSkim::CollisionIndex,
                   LBLSkim::Eta,
                   LBLSkim::Phi,
                   LBLSkim::Energy,
-                  // These fields should be conditional
-                  LBLSkim::Label,
-                  LBLSkim::EncodedInformation
                   );
-// For eg photon candidates
-DECLARE_SOA_TABLE(PhotonSkimLBL, "AOD", "PHOSKIMLBLV1",
+DECLARE_SOA_TABLE(MCDetLevelClusterSkimLBL, "AOD", "MCDCLUSSKIMLBLV1",
                   o2::soa::Index<>,
                   LBLSkim::CollisionIndex,
                   LBLSkim::Eta,
                   LBLSkim::Phi,
-                  LBLSkim::Energy);
+                  LBLSkim::Energy,
+                  // MC only fields
+                  LBLSkim::Label,
+                  LBLSkim::EncodedInformation
+                  );
 } // namespace o2::aod
 
 using Tracks = o2::soa::Filtered<o2::soa::Join<o2::aod::Tracks, o2::aod::TrackSelection>>;
 using Clusters = o2::soa::Filtered<o2::aod::EMCALClusters>;
 
 struct TrackSkimLBL {
+  // We create all tables here, and then we'll conditionally fill them based on the input parameters
+  Produces<o2::aod::EventSkimLBL> eventSkim;
   Produces<o2::aod::TrackSkimLBL> trackSkim;
   Produces<o2::aod::ClusterSkimLBL> clusterSkim;
-  Produces<o2::aod::PhotonSkimLBL> photonSkim;
+  Produces<o2::aod::MCEventSkimLBL> eventSkimMC;
+  Produces<o2::aod::MCDetLevelTrackSkimLBL> trackSkimMCD;
+  Produces<o2::aod::MCPartLevelTrackSkimLBL> trackSkimMCP;
+  Produces<o2::aod::MCDetLevelClusterSkimLBL> clusterSkimMCD;
 
   // Skim level configurables
   Configurable<bool> includeTracks{"includeTracks", true, "Whether to include tracks in the skim"};
@@ -124,8 +175,8 @@ struct TrackSkimLBL {
 
   // Cluster level observables
   Configurable<std::string> clusterDefinitionS{"clusterDefinition", "kV3Default", "cluster definition to be selected, e.g. V3Default"};
-  Configurable<float> clusterEtaMin{"clusterEtaMin", -0.7, "minimum cluster eta"}; // For ECMAL: |eta| < 0.7, phi = 1.40 - 3.26
-  Configurable<float> clusterEtaMax{"clusterEtaMax", 0.7, "maximum cluster eta"};  // For ECMAL: |eta| < 0.7, phi = 1.40 - 3.26
+  Configurable<float> clusterEtaMin{"clusterEtaMin", -0.7, "minimum cluster eta"}; // For EMCAL: |eta| < 0.7, phi = 1.40 - 3.26
+  Configurable<float> clusterEtaMax{"clusterEtaMax", 0.7, "maximum cluster eta"};  // For EMCAL: |eta| < 0.7, phi = 1.40 - 3.26
   Configurable<float> clusterPhiMin{"clusterPhiMin", -999, "minimum cluster phi"};
   Configurable<float> clusterPhiMax{"clusterPhiMax", 999, "maximum cluster phi"};
   Configurable<float> clusterEnergyMin{"clusterEnergyMin", 0.5, "minimum cluster energy in EMCAL (GeV)"};
@@ -139,7 +190,7 @@ struct TrackSkimLBL {
 
   void init(InitContext const&)
   {
-    // TODO: Still required to cast configurables into members?
+    // TODO: RJE: Still required to cast configurables into members?
     trackSelection = static_cast<std::string>(trackSelections);
     eventSelection = static_cast<std::string>(eventSelections);
     particleSelection = static_cast<std::string>(particleSelections);
@@ -153,7 +204,8 @@ struct TrackSkimLBL {
   Filter clusterFilter = (o2::aod::emcalcluster::definition == static_cast<int>(clusterDefinition) && aod::emcalcluster::eta > clusterEtaMin && aod::emcalcluster::eta < clusterEtaMax && aod::emcalcluster::phi >= clusterPhiMin && aod::emcalcluster::phi <= clusterPhiMax && aod::emcalcluster::energy >= clusterEnergyMin && aod::emcalcluster::time > clusterTimeMin && aod::emcalcluster::time < clusterTimeMax && (clusterRejectExotics && aod::emcalcluster::isExotic != true));
 
   // Process functions
-  void processTracks(
+  // Data tracks
+  void processDataTracks(
     soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision,
     Tracks const& tracks
   )
@@ -162,13 +214,63 @@ struct TrackSkimLBL {
       return;
     }
 
+    // Event level
+
+    //
     for (auto& track : tracks) {
-      trackSkim(collision.globalIndex(), track.pt(), track.eta(), track.phi());
+      // NOTE: Charge is encoded into pt here!
+      trackSkim(collision.globalIndex(), track.pt() * track.sign(), track.eta(), track.phi());
     }
   }
-  PROCESS_SWITCH(TrackSkimLBL, processTracks, "Tracks", true);
+  PROCESS_SWITCH(TrackSkimLBL, processDataTracks, "Data Tracks", true);
 
-  void processClusters(
+  // MC det and part level tracks
+  void processMCTracks(
+    soa::Join<aod::Collisions, aod::McCollisionLabels>::iterator const& collision, soa::Join<aod::Tracks, aod::McTrackLabels> const& tracks,
+    aod::McParticles const& mcParticles, aod::McCollisions const& mcCollisions
+  )
+  {
+    // TODO: RJE: MC event selection
+    //if (!selectCollision(collision, eventSelection)) {
+    //  return;
+    //}
+
+    // Event level
+    eventSkim(collision.globalIndex(), mcCollisions.weight());
+
+    // Det level
+    for (auto& track : tracks) {
+      // FIXME: RJE: We will lose MC particles if unmatched. However, we don't have the right MC information with the match.
+      //             This should be revisited later.
+      if (!track.has_mcParticle()) {
+        LOGF(warning, "No MC particle for track, skip...");
+        continue;
+      }
+      auto particle = track.mcParticle();
+
+      // NOTE: Charge is encoded into pt here!
+      // TODO: RJE: Add encoded information when we decide what we want.
+      trackSkimMCD(
+        collision.globalIndex(),
+        track.pt() * track.sign(), track.eta(), track.phi(),
+        particle.pdgCode(), particle.globalIndex(), 0
+      );
+    }
+
+    // Particle level
+    for (auto& particle : mcParticles) {
+      // NOTE: In principle, we don't need to encode the charge here since we have the PDG code.
+      // TODO: RJE: Add encoded information when we decide what we want.
+      trackSkimMCP(
+        collision.globalIndex(),
+        particle.pt(), particle.eta(), particle.phi(),
+        particle.pdgCode(), particle.globalIndex(), 0
+      );
+    }
+  }
+  PROCESS_SWITCH(TrackSkimLBL, processMCTracks, "Part and det level tracks", true);
+
+  void processDataClusters(
     soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision,
     JetClusters const& clusters
   )
@@ -178,14 +280,13 @@ struct TrackSkimLBL {
     }
 
     for (auto& cluster : clusters) {
-      // TODO: RJE: Calculate properly with vertex correction
+      // FIXME: RJE: Calculate properly with vertex correction, etc...
       float energy = std::sqrt(cluster.p() * cluster.p() + mPionSquared);
       clusterSkim(collision.globalIndex(), cluster.eta(), cluster.phi(), energy);
     }
   }
-  PROCESS_SWITCH(TrackSkimLBL, processClusters, "Clusters", true);
-
-  // TODO: RJE: Photon (pre)selection? Or just build from clusters?
+  PROCESS_SWITCH(TrackSkimLBL, processDataClusters, "Data clusters", true);
+  // TODO: Clusters at MC det level
 };
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
