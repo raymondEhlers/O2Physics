@@ -45,7 +45,7 @@ DECLARE_SOA_COLUMN(CollisionIndex, collisionIndex, int64_t);
 // TODO: RJE: Check precision and ranges to ensure they're suitable for all values.
 //            They could be tuned up or down based on requirements.
 // TODO: RJE: Removed run number since it requires BC, which makes the rest more difficult. Can add back later
-//DECLARE_SOA_COLUMN(RunNumber, runNumber, int32_t);
+// DECLARE_SOA_COLUMN(RunNumber, runNumber, int32_t);
 DECLARE_SOA_COLUMN(Centrality, centrality, float32_t);
 DECLARE_SOA_COLUMN(EventPlane, eventPlane, float32_t);
 DECLARE_SOA_COLUMN(EventWeight, eventWeight, float32_t);
@@ -65,26 +65,25 @@ DECLARE_SOA_COLUMN(EncodedInformation, encodedInformation, int32_t);
  * NOTE: RJE: I manually defined tables for now, but for better future consistency, we might consider definining them
  *            with macros. That way, we can ensure the format will match up (since there's no concept of table inheritance)
  *            while still only including the MC fields conditionally.
-***********************************/
+ ***********************************/
 /////////////////
 // Event level tables
 /////////////////
 DECLARE_SOA_TABLE(EventSkimLBL, "AOD", "EVTSKIMLBLV1",
                   o2::soa::Index<>,
                   LBLSkim::CollisionIndex
-                  //LBLSkim::RunNumber
-                  //LBLSkim::Centrality,
-                  //LBLSkim::EventPlane
+                  // LBLSkim::RunNumber
+                  // LBLSkim::Centrality,
+                  // LBLSkim::EventPlane
 );
 DECLARE_SOA_TABLE(MCEventSkimLBL, "AOD", "MCEVTSKIMLBLV1",
                   o2::soa::Index<>,
                   LBLSkim::CollisionIndex,
-                  //LBLSkim::RunNumber,
-                  //LBLSkim::Centrality,
-                  //LBLSkim::EventPlane
-                  // MC only fields
-                  LBLSkim::EventWeight
-);
+                  // LBLSkim::RunNumber,
+                  // LBLSkim::Centrality,
+                  // LBLSkim::EventPlane
+                  //  MC only fields
+                  LBLSkim::EventWeight);
 /////////////////
 // Track tables
 /////////////////
@@ -93,8 +92,7 @@ DECLARE_SOA_TABLE(TrackSkimLBL, "AOD", "TRKSKIMLBLV1",
                   LBLSkim::CollisionIndex,
                   LBLSkim::Pt,
                   LBLSkim::Eta,
-                  LBLSkim::Phi,
-                  );
+                  LBLSkim::Phi, );
 // MC det and part level
 // TODO: RJE: Need to be able to turn the encoded info field on and off
 DECLARE_SOA_TABLE(MCDetLevelTrackSkimLBL, "AOD", "MCDTRKSKIMLBLV1",
@@ -106,8 +104,7 @@ DECLARE_SOA_TABLE(MCDetLevelTrackSkimLBL, "AOD", "MCDTRKSKIMLBLV1",
                   // MC only fields
                   LBLSkim::ParticleID,
                   LBLSkim::Label,
-                  LBLSkim::EncodedInformation
-                  );
+                  LBLSkim::EncodedInformation);
 // Same as det level, but with a separate name to ensure the tables don't conflict
 DECLARE_SOA_TABLE(MCPartLevelTrackSkimLBL, "AOD", "MCPTRKSKIMLBLV1",
                   o2::soa::Index<>,
@@ -118,8 +115,7 @@ DECLARE_SOA_TABLE(MCPartLevelTrackSkimLBL, "AOD", "MCPTRKSKIMLBLV1",
                   // MC only fields
                   LBLSkim::ParticleID,
                   LBLSkim::Label,
-                  LBLSkim::EncodedInformation
-                  );
+                  LBLSkim::EncodedInformation);
 /////////////////
 // Cluster tables
 /////////////////
@@ -128,8 +124,7 @@ DECLARE_SOA_TABLE(ClusterSkimLBL, "AOD", "CLUSSKIMLBLV1",
                   LBLSkim::CollisionIndex,
                   LBLSkim::Eta,
                   LBLSkim::Phi,
-                  LBLSkim::Energy,
-                  );
+                  LBLSkim::Energy, );
 DECLARE_SOA_TABLE(MCDetLevelClusterSkimLBL, "AOD", "MCDCLUSSKIMLBLV1",
                   o2::soa::Index<>,
                   LBLSkim::CollisionIndex,
@@ -138,8 +133,7 @@ DECLARE_SOA_TABLE(MCDetLevelClusterSkimLBL, "AOD", "MCDCLUSSKIMLBLV1",
                   LBLSkim::Energy,
                   // MC only fields
                   LBLSkim::Label,
-                  LBLSkim::EncodedInformation
-                  );
+                  LBLSkim::EncodedInformation);
 } // namespace o2::aod
 
 using Tracks = o2::soa::Filtered<o2::soa::Join<o2::aod::Tracks, o2::aod::TrackSelection>>;
@@ -207,8 +201,7 @@ struct TrackSkimLBL {
   // Data tracks
   void processDataTracks(
     soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision,
-    Tracks const& tracks
-  )
+    Tracks const& tracks)
   {
     if (!selectCollision(collision, eventSelection)) {
       return;
@@ -227,11 +220,10 @@ struct TrackSkimLBL {
   // MC det and part level tracks
   void processMCTracks(
     soa::Join<aod::Collisions, aod::McCollisionLabels>::iterator const& collision, soa::Join<aod::Tracks, aod::McTrackLabels> const& tracks,
-    aod::McParticles const& mcParticles, aod::McCollisions const& mcCollisions
-  )
+    aod::McParticles const& mcParticles, aod::McCollisions const& mcCollisions)
   {
     // TODO: RJE: MC event selection
-    //if (!selectCollision(collision, eventSelection)) {
+    // if (!selectCollision(collision, eventSelection)) {
     //  return;
     //}
 
@@ -253,8 +245,7 @@ struct TrackSkimLBL {
       trackSkimMCD(
         collision.globalIndex(),
         track.pt() * track.sign(), track.eta(), track.phi(),
-        particle.pdgCode(), particle.globalIndex(), 0
-      );
+        particle.pdgCode(), particle.globalIndex(), 0);
     }
 
     // Particle level
@@ -264,16 +255,14 @@ struct TrackSkimLBL {
       trackSkimMCP(
         collision.globalIndex(),
         particle.pt(), particle.eta(), particle.phi(),
-        particle.pdgCode(), particle.globalIndex(), 0
-      );
+        particle.pdgCode(), particle.globalIndex(), 0);
     }
   }
   PROCESS_SWITCH(TrackSkimLBL, processMCTracks, "Part and det level tracks", true);
 
   void processDataClusters(
     soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision,
-    JetClusters const& clusters
-  )
+    JetClusters const& clusters)
   {
     if (!selectCollision(collision, eventSelection)) {
       return;
