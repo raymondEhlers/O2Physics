@@ -36,13 +36,10 @@
 
 #include "PWGJE/Core/JetDerivedDataUtilities.h"
 #include "PWGJE/DataModel/JetReducedData.h"
-//#include "PWGJE/TableProducer/jetfinder.h"
 
 using namespace o2;
 using namespace o2::framework;
 using namespace o2::framework::expressions;
-
-// TODO: Format!
 
 // Define track skim table
 namespace o2::aod
@@ -199,10 +196,7 @@ struct TrackSkimExploratory {
   Configurable<float> clusterTimeMax{"clusterTimeMax", 999., "maximum Cluster time (ns)"};
   Configurable<bool> clusterRejectExotics{"clusterRejectExotics", true, "Reject exotic clusters"};
 
-  // Track and event selection
-  std::string eventSelection;
-  std::string trackSelection;
-  std::string particleSelection;
+  // Members for storing track and event selection
   int eventSelection = -1;
   int trackSelection = -1;
   int particleSelection = -1;
@@ -211,6 +205,7 @@ struct TrackSkimExploratory {
   {
     eventSelection = JetDerivedDataUtilities::initialiseEventSelection(static_cast<std::string>(eventSelections));
     trackSelection = JetDerivedDataUtilities::initialiseTrackSelection(static_cast<std::string>(trackSelections));
+    // TODO: RJE: Not yet implemented.
     particleSelection = JetDerivedDataUtilities::initialiseTrackSelection(static_cast<std::string>(particleSelections));
   }
 
@@ -220,7 +215,6 @@ struct TrackSkimExploratory {
   Filter trackCuts = (aod::track::pt >= trackPtMin && aod::track::pt < trackPtMax && aod::track::eta > trackEtaMin && aod::track::eta < trackEtaMax && aod::track::phi >= trackPhiMin && aod::track::phi <= trackPhiMax); // do we need eta cut both here and in the global selection?
   Filter partCuts = (aod::mcparticle::pt >= trackPtMin && aod::mcparticle::pt < trackPtMax && aod::mcparticle::eta > trackEtaMin && aod::mcparticle::eta < trackEtaMax);
   Filter clusterFilter = (o2::aod::emcalcluster::definition == static_cast<int>(clusterDefinition) && aod::emcalcluster::eta > clusterEtaMin && aod::emcalcluster::eta < clusterEtaMax && aod::emcalcluster::phi >= clusterPhiMin && aod::emcalcluster::phi <= clusterPhiMax && aod::emcalcluster::energy >= clusterEnergyMin && aod::emcalcluster::time > clusterTimeMin && aod::emcalcluster::time < clusterTimeMax && (clusterRejectExotics && aod::emcalcluster::isExotic != true));
-
 
   // Process functions
   // Data tracks
@@ -233,9 +227,13 @@ struct TrackSkimExploratory {
     }
 
     // Event level
+    eventSkim(collision.globalIndex());
 
-    //
+    // Track level
     for (auto& track : tracks) {
+      if (!JetDerivedDataUtilities::selectTrack(track, trackSelection)) {
+        continue;
+      }
       // NOTE: Charge is encoded into pt here!
       trackSkim(collision.globalIndex(), track.pt() * track.sign(), track.eta(), track.phi());
     }
@@ -244,7 +242,7 @@ struct TrackSkimExploratory {
 
   // MC det and part level tracks
   void processMCTracks(
-    soa::Join<aod::JCollisions, aod::JMcCollisionLbs>::iterator const& collision, soa::Join<aod::JTracks, aod::JMcTrackLabels> const& tracks,
+    soa::Join<aod::JCollisions, aod::JMcCollisionLbs>::iterator const& collision, soa::Join<aod::JTracks, aod::JMcTrackLbs> const& tracks,
     aod::JMcParticles const& mcParticles,
     aod::JMcCollisions const&)
   {
@@ -268,6 +266,11 @@ struct TrackSkimExploratory {
         LOGF(warning, "No MC particle for track, skip...");
         continue;
       }
+      // Selection
+      if (!JetDerivedDataUtilities::selectTrack(track, trackSelection)) {
+        continue;
+      }
+      // But need the part level match for the MC information
       auto particle = track.mcParticle();
 
       // NOTE: Charge is encoded into pt here!
