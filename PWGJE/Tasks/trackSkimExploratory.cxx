@@ -34,8 +34,9 @@
 #include "Common/DataModel/EventSelection.h"
 #include "Common/DataModel/TrackSelectionTables.h"
 
-#include "PWGJE/DataModel/EMCALClusters.h"
-#include "PWGJE/TableProducer/jetfinder.h"
+#include "PWGJE/Core/JetDerivedDataUtilities.h"
+#include "PWGJE/DataModel/JetReducedData.h"
+//#include "PWGJE/TableProducer/jetfinder.h"
 
 using namespace o2;
 using namespace o2::framework;
@@ -198,16 +199,19 @@ struct TrackSkimExploratory {
   Configurable<float> clusterTimeMax{"clusterTimeMax", 999., "maximum Cluster time (ns)"};
   Configurable<bool> clusterRejectExotics{"clusterRejectExotics", true, "Reject exotic clusters"};
 
-  std::string trackSelection;
+  // Track and event selection
   std::string eventSelection;
+  std::string trackSelection;
   std::string particleSelection;
+  int eventSelection = -1;
+  int trackSelection = -1;
+  int particleSelection = -1;
 
   void init(InitContext const&)
   {
-    // TODO: RJE: Still required to cast configurables into members?
-    trackSelection = static_cast<std::string>(trackSelections);
-    eventSelection = static_cast<std::string>(eventSelections);
-    particleSelection = static_cast<std::string>(particleSelections);
+    eventSelection = JetDerivedDataUtilities::initialiseEventSelection(static_cast<std::string>(eventSelections));
+    trackSelection = JetDerivedDataUtilities::initialiseTrackSelection(static_cast<std::string>(trackSelections));
+    particleSelection = JetDerivedDataUtilities::initialiseTrackSelection(static_cast<std::string>(particleSelections));
   }
 
   // Filters
@@ -217,13 +221,14 @@ struct TrackSkimExploratory {
   Filter partCuts = (aod::mcparticle::pt >= trackPtMin && aod::mcparticle::pt < trackPtMax && aod::mcparticle::eta > trackEtaMin && aod::mcparticle::eta < trackEtaMax);
   Filter clusterFilter = (o2::aod::emcalcluster::definition == static_cast<int>(clusterDefinition) && aod::emcalcluster::eta > clusterEtaMin && aod::emcalcluster::eta < clusterEtaMax && aod::emcalcluster::phi >= clusterPhiMin && aod::emcalcluster::phi <= clusterPhiMax && aod::emcalcluster::energy >= clusterEnergyMin && aod::emcalcluster::time > clusterTimeMin && aod::emcalcluster::time < clusterTimeMax && (clusterRejectExotics && aod::emcalcluster::isExotic != true));
 
+
   // Process functions
   // Data tracks
   void processDataTracks(
-    soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision,
+    soa::Filtered<aod::JCollisions>::iterator const& collision,
     Tracks const& tracks)
   {
-    if (!selectCollision(collision, eventSelection)) {
+    if (!JetDerivedDataUtilities::selectCollision(collision, eventSelection)) {
       return;
     }
 
@@ -239,12 +244,12 @@ struct TrackSkimExploratory {
 
   // MC det and part level tracks
   void processMCTracks(
-    soa::Join<aod::Collisions, aod::McCollisionLabels>::iterator const& collision, soa::Join<aod::Tracks, aod::McTrackLabels> const& tracks,
-    aod::McParticles const& mcParticles,
-    aod::McCollisions const&)
+    soa::Join<aod::JCollisions, aod::JMcCollisionLbs>::iterator const& collision, soa::Join<aod::JTracks, aod::JMcTrackLabels> const& tracks,
+    aod::JMcParticles const& mcParticles,
+    aod::JMcCollisions const&)
   {
     // TODO: RJE: MC event selection
-    // if (!selectCollision(collision, eventSelection)) {
+    // if (!JetDerivedDataUtilities::selectCollision(collision, eventSelection)) {
     //  return;
     //}
 
@@ -286,10 +291,14 @@ struct TrackSkimExploratory {
   PROCESS_SWITCH(TrackSkimExploratory, processMCTracks, "Part and det level tracks", true);
 
   void processDataClusters(
-    soa::Filtered<soa::Join<aod::Collisions, aod::EvSels>>::iterator const& collision,
-    soa::Filtered<o2::aod::EMCALClusters> const& clusters)
+    soa::Filtered<aod::JCollisions>::iterator const& collision,
+    soa::Filtered<o2::aod::JCluster> const& clusters)
   {
-    if (!selectCollision(collision, eventSelection)) {
+    if (!JetDerivedDataUtilities::selectCollision(collision, eventSelection)) {
+      return;
+    }
+    // Require EMCal
+    if (!JetDerivedDataUtilities::eventEMCAL(collision)) {
       return;
     }
 
