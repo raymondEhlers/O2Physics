@@ -154,8 +154,31 @@ DECLARE_SOA_TABLE(MCDetLevelClusterSkimExploratory, "AOD", "MCDCLUSSKIMV1",
                   ExploratorySkim::EncodedInformation);
 } // namespace o2::aod
 
-using Tracks = o2::soa::Filtered<o2::soa::Join<o2::aod::Tracks, o2::aod::TrackSelection>>;
-using Clusters = o2::soa::Filtered<o2::aod::EMCALClusters>;
+using Tracks = o2::soa::Filtered<o2::aod::JTracks>;
+using Clusters = o2::soa::Filtered<o2::aod::JClusters>;
+
+/**
+ * Apply particle level selection.
+ *
+ * Extracted from `analyseParticles` in `jetfinder.h`. Can improved upon/centralized later...
+ *
+ * @param particle The particle to check
+ * @param particleSelection The particle selection to apply
+ * @return True if the particle passes the selection, and false otherwise
+ */
+template <typename T>
+bool selectParticle(T const& particle, const std::string & particleSelection) {
+  if (particleSelection == "PhysicalPrimary" && !particle.isPhysicalPrimary()) { // CHECK : Does this exclude the HF hadron?
+    return false;
+  } else if (particleSelection == "HepMCStatus" && particle.getHepMCStatusCode() != 1) { // do we need isPhysicalPrimary as well? Note: Might give unforseen results if the generator isnt PYTHIA
+    return false;
+  } else if (particleSelection == "GenStatus" && particle.getGenStatusCode() != 1) {
+    return false;
+  } else if (particleSelection == "PhysicalPrimaryAndHepMCStatus" && (!particle.isPhysicalPrimary() || particle.getHepMCStatusCode() != 1)) {
+    return false;
+  }
+  return true;
+}
 
 struct TrackSkimExploratory {
   // We create all tables here, and then we'll conditionally fill them based on the input parameters
@@ -205,16 +228,15 @@ struct TrackSkimExploratory {
   {
     eventSelection = JetDerivedDataUtilities::initialiseEventSelection(static_cast<std::string>(eventSelections));
     trackSelection = JetDerivedDataUtilities::initialiseTrackSelection(static_cast<std::string>(trackSelections));
-    // TODO: RJE: Not yet implemented.
     particleSelection = JetDerivedDataUtilities::initialiseTrackSelection(static_cast<std::string>(particleSelections));
   }
 
   // Filters
   o2::aod::EMCALClusterDefinition clusterDefinition = o2::aod::emcalcluster::getClusterDefinitionFromString(clusterDefinitionS.value);
-  Filter collisionFilter = nabs(aod::collision::posZ) < vertexZCut;
-  Filter trackCuts = (aod::track::pt >= trackPtMin && aod::track::pt < trackPtMax && aod::track::eta > trackEtaMin && aod::track::eta < trackEtaMax && aod::track::phi >= trackPhiMin && aod::track::phi <= trackPhiMax); // do we need eta cut both here and in the global selection?
-  Filter partCuts = (aod::mcparticle::pt >= trackPtMin && aod::mcparticle::pt < trackPtMax && aod::mcparticle::eta > trackEtaMin && aod::mcparticle::eta < trackEtaMax);
-  Filter clusterFilter = (o2::aod::emcalcluster::definition == static_cast<int>(clusterDefinition) && aod::emcalcluster::eta > clusterEtaMin && aod::emcalcluster::eta < clusterEtaMax && aod::emcalcluster::phi >= clusterPhiMin && aod::emcalcluster::phi <= clusterPhiMax && aod::emcalcluster::energy >= clusterEnergyMin && aod::emcalcluster::time > clusterTimeMin && aod::emcalcluster::time < clusterTimeMax && (clusterRejectExotics && aod::emcalcluster::isExotic != true));
+  Filter collisionFilter = nabs(aod::jcollision::posZ) < vertexZCut;
+  Filter trackCuts = (aod::jtrack::pt >= trackPtMin && aod::jtrack::pt < trackPtMax && aod::jtrack::eta > trackEtaMin && aod::jtrack::eta < trackEtaMax && aod::jtrack::phi >= trackPhiMin && aod::jtrack::phi <= trackPhiMax); // do we need eta cut both here and in the global selection?
+  Filter partCuts = (aod::jmcparticle::pt >= trackPtMin && aod::jmcparticle::pt < trackPtMax && aod::jmcparticle::eta > trackEtaMin && aod::jmcparticle::eta < trackEtaMax);
+  Filter clusterFilter = (o2::aod::jcluster::definition == static_cast<int>(clusterDefinition) && aod::jcluster::eta > clusterEtaMin && aod::jcluster::eta < clusterEtaMax && aod::jcluster::phi >= clusterPhiMin && aod::jcluster::phi <= clusterPhiMax && aod::jcluster::energy >= clusterEnergyMin && aod::jcluster::time > clusterTimeMin && aod::jcluster::time < clusterTimeMax && (clusterRejectExotics && aod::jcluster::isExotic != true));
 
   // Process functions
   // Data tracks
@@ -234,8 +256,8 @@ struct TrackSkimExploratory {
       if (!JetDerivedDataUtilities::selectTrack(track, trackSelection)) {
         continue;
       }
-      // NOTE: Charge is encoded into pt here!
-      trackSkim(collision.globalIndex(), track.pt() * track.sign(), track.eta(), track.phi());
+      // TODO: RJE: We want to encode charge here with the sign, but it's not stored in the jet derived data.
+      trackSkim(collision.globalIndex(), track.pt(), track.eta(), track.phi());
     }
   }
   PROCESS_SWITCH(TrackSkimExploratory, processDataTracks, "Data Tracks", true);
@@ -273,16 +295,22 @@ struct TrackSkimExploratory {
       // But need the part level match for the MC information
       auto particle = track.mcParticle();
 
-      // NOTE: Charge is encoded into pt here!
+      // TODO: RJE: We want to encode charge here with the sign, but it's not stored in the jet derived data.
+      //            Note that we do store the PDG code, so that will also give us the charge. But that's not
+      //            viable if there's no matched MC particle.
       // TODO: RJE: Add encoded information when we decide what we want.
       trackSkimMCD(
         collision.globalIndex(),
-        track.pt() * track.sign(), track.eta(), track.phi(),
+        track.pt(), track.eta(), track.phi(),
         particle.pdgCode(), particle.globalIndex(), 0);
     }
 
     // Particle level
     for (auto& particle : mcParticles) {
+      // Selection
+      if (!selectParticle(particle, particleSelection)) {
+        continue;
+      }
       // NOTE: In principle, we don't need to encode the charge here since we have the PDG code.
       // TODO: RJE: Add encoded information when we decide what we want.
       trackSkimMCP(
