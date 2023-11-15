@@ -167,7 +167,8 @@ using Clusters = o2::soa::Filtered<o2::aod::JClusters>;
  * @return True if the particle passes the selection, and false otherwise
  */
 template <typename T>
-bool selectParticle(T const& particle, const std::string & particleSelection) {
+bool selectParticle(T const& particle, const std::string& particleSelection)
+{
   if (particleSelection == "PhysicalPrimary" && !particle.isPhysicalPrimary()) { // CHECK : Does this exclude the HF hadron?
     return false;
   } else if (particleSelection == "HepMCStatus" && particle.getHepMCStatusCode() != 1) { // do we need isPhysicalPrimary as well? Note: Might give unforseen results if the generator isnt PYTHIA
